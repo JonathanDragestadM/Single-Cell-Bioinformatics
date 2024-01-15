@@ -3,12 +3,17 @@ title: "QC and Clustering for snRNA-seq Data"
 format: html
 ---
 
+```{r}
+rm(list = ls())
+```
+
 Load the libraries:
 
 ```{r}
 library(Seurat)
 library(tidyverse)
 library(patchwork)
+library(clustree)
 ```
 
 Load the seurat object:
@@ -195,7 +200,53 @@ snRNAseq <- RunPCA(snRNAseq,
                    features = VariableFeatures(object = snRNAseq))
 ```
 
+Feature in PCA space
 
+```{r}
 
+VizDimLoadings(snRNAseq, dims = 1:2, reduction = "pca")
+```
 
+Cells in PCA space
 
+```{r}
+DimPlot(snRNAseq, reduction = "pca") + NoLegend()
+```
+
+### Dimintionality determination
+
+```{r}
+ElbowPlot(snRNAseq)
+```
+
+### Clustering
+
+Based on the elbow plots 6, 11, 16 or \>20 could be argued for.
+
+```{r}
+snRNAseq <- FindNeighbors(snRNAseq, dims = 1:16)
+
+```
+
+Visual clusters
+
+```{r}
+snRNAseq <- FindClusters(snRNAseq, resolution = 0.5)
+snRNAseq <- FindClusters(snRNAseq, resolution = 0.3)
+snRNAseq <- FindClusters(snRNAseq, resolution = 0.2)
+snRNAseq <- FindClusters(snRNAseq, resolution = 0.1)
+
+```
+
+```{r}
+clustree(snRNAseq, prefix = "integrated_snn_res.")
+```
+
+```{r}
+snRNAseq <- RunUMAP(snRNAseq, dims = 1:16)
+DimPlot(snRNAseq, reduction = "umap")
+```
+
+```{r}
+saveRDS(snRNAseq, file = paste0(here(),"../data/pbmc_tutorial.rds"))
+```
