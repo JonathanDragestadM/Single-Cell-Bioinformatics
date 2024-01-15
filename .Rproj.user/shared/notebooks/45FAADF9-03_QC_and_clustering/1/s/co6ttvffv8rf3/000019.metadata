@@ -1,0 +1,1 @@
+{"height":322.6205191594561,"width":522.0,"size_behavior":0,"conditions":[[1,"Warning: \u001B[38;5;254mTransformation introduced infinite values in continuous\nx-axis\u001B[39m"],[1,"Warning: \u001B[38;5;254mRemoved 7427 rows containing missing values (`geom_point()`).\u001B[39m"]]}
