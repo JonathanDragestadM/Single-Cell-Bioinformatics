@@ -2,3 +2,5 @@ data/01_RNA_seurat
 papers/
 .Rhistory
 .Rproj.user
+.Rapp.history
+Single_Cell_Bioinformatics.Rproj
