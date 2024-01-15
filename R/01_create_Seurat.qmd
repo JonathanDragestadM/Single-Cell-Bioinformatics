@@ -8,6 +8,7 @@ Load the libraries:
 ```{r}
 library(Seurat)
 library(tidyverse)
+library(here)
 ```
 
 Create seurat objects based on this vignette: https://satijalab.org/seurat/reference/readmtx
@@ -27,19 +28,21 @@ create_sample_seurat <- function(sample_name){
     pattern = regex, 
     full.names = TRUE
     )
+  files <- sort(files)
   
   expression_matrix <- ReadMtx(
-    mtx = files[1],
-    cells = files[2],
-    features = files[3]
+    mtx = files[3],
+    cells = files[1],
+    features = files[2]
     )
-  
+
   seurat_object <- CreateSeuratObject(
     counts = expression_matrix,
     min.cells = 3
     )
-  
+
   return(seurat_object)
+
 }
 ```
 
