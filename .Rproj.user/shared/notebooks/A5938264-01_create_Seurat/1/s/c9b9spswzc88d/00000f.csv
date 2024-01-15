@@ -1,6 +1,0 @@
-"0","snRNAseq <- merge(CRC_1, "
-"0","                  y = c(CRC_2, CRC_3, CRC_4, CRC_5, "
-"0","                        norm_1, norm_2, norm_3, norm_4, norm_5), "
-"0","                  add.cell.ids = c(""CRC_1"", ""CRC_2"", ""CRC_3"", ""CRC_4"", ""CRC_5"", "
-"0","                                   ""norm_1"", ""norm_2"", ""norm_3"", ""norm_4"", ""norm_5""), "
-"0","                  project = ""snRNAseq"")"
