@@ -1,0 +1,74 @@
+---
+title: "Create Seurat Object for snRNA-seq Data"
+format: html
+---
+
+Load the libraries:
+
+```{r}
+library(Seurat)
+library(tidyverse)
+```
+
+Create a function for converting the sample files to a seurat object
+
+```{r}
+create_sample_seurat <- function(sample_name){
+  regex <- str_c(
+    "^", 
+    sample_name, 
+    sep = ""
+    )
+  
+  files <- list.files(
+    path = "../data/_raw/RNA_data/", 
+    pattern = regex, 
+    full.names = TRUE
+    )
+  
+  expression_matrix <- ReadMtx(
+    mtx = files[1],
+    cells = files[2],
+    features = files[3]
+    )
+  
+  seurat_object <- CreateSeuratObject(
+    counts = expression_matrix
+    )
+  
+  return(seurat_object)
+}
+```
+
+Create seurat objects for each sample:
+
+```{r}
+CRC_1 <- create_sample_seurat("CRC_1")
+CRC_2 <- create_sample_seurat("CRC_2")
+CRC_3 <- create_sample_seurat("CRC_3")
+CRC_4 <- create_sample_seurat("CRC_4")
+CRC_5 <- create_sample_seurat("CRC_5")
+norm_1 <- create_sample_seurat("norm_1")
+norm_2 <- create_sample_seurat("norm_2")
+norm_3 <- create_sample_seurat("norm_3")
+norm_4 <- create_sample_seurat("norm_4")
+norm_5 <- create_sample_seurat("norm_5")
+```
+
+Merge the seurat objects:
+
+```{r}
+snRNAseq <- merge(CRC_1, 
+                  y = c(CRC_2, CRC_3, CRC_4, CRC_5, 
+                        norm_1, norm_2, norm_3, norm_4, norm_5), 
+                  add.cell.ids = c("CRC_1", "CRC_2", "CRC_3", "CRC_4", "CRC_5", 
+                                   "norm_1", "norm_2", "norm_3", "norm_4", "norm_5"), 
+                  project = "snRNAseq")
+```
+
+Save object:
+
+```{r}
+saveRDS(snRNAseq, file = "../data/RNA_seurat")
+```
+
