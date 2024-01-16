@@ -1,5 +1,7 @@
 data/01_RNA_seurat
 data/03_RNA_seurat
+data/04_RNA_seurat
+plots/
 papers/
 .Rhistory
 .Rproj.user
