@@ -7,6 +7,7 @@ editor: visual
 ## Differenital Abundance and Differential Gene Expression + GSEA
 
 ## Loading libraries
+
 ```{r}
 library(Seurat)
 library(SingleCellExperiment)
@@ -22,22 +23,18 @@ library(DESeq2)
 ```
 
 ## Load data
+
 ```{r}
-data <- readRDS("XXX")
+data <- readRDS("../data/03_RNA_seurat")
 ```
 
-## Subset data
-```{r}
-data.sub <- subset(data, subset = XXX)
-```
-
-## Create SingleCellExperiment-object 
+## Create SingleCellExperiment-object
 ```{r}
 sce <- as.SingleCellExperiment(data)
-sce <- as.SingleCellExperiment(data.sub)
 ```
 
 ## Differential Abundance Analysis
+
 ```{r}
 abundances <- table(sce$cell_type_2, sce$id) 
 abundances <- unclass(abundances) 
@@ -45,12 +42,14 @@ head(abundances)
 ```
 
 ## Create count matrix
+
 ```{r}
 knn_mat = knn_simMat(immune.sub@graphs$integrated_snn, immune.sub$cell_type_2)
 print(knn_mat)
 ```
 
-Do something that makes sense with the groups. 
+Do something that makes sense with the groups.
+
 ```{r}
 # data.sub$timepoint[immune.sub$timepoint == '3hMTB'] <- 'stim'
 # data.sub$timepoint[immune.sub$timepoint == 'UT'] <- 'ctrl'
@@ -62,13 +61,16 @@ Do something that makes sense with the groups.
 ```
 
 ## Estimate similarity matrix
+
 Make design matrix relevant to data
+
 ```{r}
 sim_design = data.frame(condition = c(rep("ctrl", 8), rep("stim", 8)))
 dcats_GLM(count_mat, sim_design, knn_mat)
 ```
 
 ## Differential Gene Expression
+
 ```{r}
 
 #Preparing the single-cell dataset for pseudobulk analysis
@@ -133,6 +135,3 @@ resultsNames(dds)
 ```
 
 ## GSEA
-
-
-
