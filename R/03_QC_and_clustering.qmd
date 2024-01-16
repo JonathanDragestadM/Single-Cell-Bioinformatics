@@ -130,7 +130,7 @@ snRNAseq[[]] |>
   geom_density() +
   theme_bw() +
   ylab("Cell density") +
-  geom_vline(xintercept = 20,
+  geom_vline(xintercept = 5,
              color = "red")
 
 ggsave("../plots/03_dens_percent.mt.png")
@@ -140,7 +140,7 @@ Filter based on plots:
 
 ```{r}
 snRNAseq <- subset(snRNAseq, 
-                   subset = percent.mt < 20)
+                   subset = percent.mt < 5)
 ```
 
 ### remove ribosomal genes
@@ -193,60 +193,78 @@ snRNAseq <- ScaleData(snRNAseq,
                       features = all.genes)
 ```
 
-Linear dimensional reduction:
+Linear dimensional reduction (PCA):
 
 ```{r}
 snRNAseq <- RunPCA(snRNAseq, 
                    features = VariableFeatures(object = snRNAseq))
 ```
 
-Feature in PCA space
+Feature in first two principal components:
 
 ```{r}
+VizDimLoadings(snRNAseq, 
+               dims = 1:2, 
+               reduction = "pca")
 
-VizDimLoadings(snRNAseq, dims = 1:2, reduction = "pca")
+ggsave("../plots/03_PCA_features_1_and_2.png")
 ```
 
-Cells in PCA space
+Cells in PCA space:
 
 ```{r}
 DimPlot(snRNAseq, reduction = "pca") + NoLegend()
 ```
 
-### Dimintionality determination
+Determine dimensionality of the data:
 
 ```{r}
 ElbowPlot(snRNAseq)
+
+ggsave("../plots/03_elbow_plot.png")
 ```
 
-### Clustering
+We decide to move forward with a dimensionality of 16 PCs.
 
-Based on the elbow plots 6, 11, 16 or \>20 could be argued for.
+Clustering:
 
 ```{r}
 snRNAseq <- FindNeighbors(snRNAseq, dims = 1:16)
 
-```
-
-Visual clusters
-
-```{r}
+snRNAseq <- FindClusters(snRNAseq, resolution = 0.8)
 snRNAseq <- FindClusters(snRNAseq, resolution = 0.5)
 snRNAseq <- FindClusters(snRNAseq, resolution = 0.3)
-snRNAseq <- FindClusters(snRNAseq, resolution = 0.2)
 snRNAseq <- FindClusters(snRNAseq, resolution = 0.1)
-
 ```
 
-```{r}
-clustree(snRNAseq, prefix = "integrated_snn_res.")
-```
+Determining resolution:
 
 ```{r}
-snRNAseq <- RunUMAP(snRNAseq, dims = 1:16)
-DimPlot(snRNAseq, reduction = "umap")
+clustree(snRNAseq, prefix = "RNA_snn_res.")
+
+ggsave("../plots/03_clustree.png")
 ```
 
+Going forward, we will use the clustering at resolution 0.3.
+
 ```{r}
-saveRDS(snRNAseq, file = paste0(here(),"../data/pbmc_tutorial.rds"))
+Idents(snRNAseq) <- "RNA_snn_res.0.3"
+```
+
+UMAP:
+
+```{r}
+snRNAseq <- RunUMAP(snRNAseq, 
+                    dims = 1:16)
+
+DimPlot(snRNAseq, 
+        reduction = "umap")
+
+ggsave("../plots/03_umap_03.png")
+```
+
+Save object:
+
+```{r}
+saveRDS(snRNAseq, file = "../data/03_RNA_seurat")
 ```
