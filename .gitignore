@@ -8,5 +8,12 @@ papers/
 .Rproj.user
 Single-Cell-Bioinformatics.Rproj
 .Rapp.history
-plots/
 Single_Cell_Bioinformatics.Rproj
+HeleneProj.Rproj
+ATACseq/
+ArchRLogs/
+QualityControl/
+scATACseq_data/
+tmp/
+plots/
+
