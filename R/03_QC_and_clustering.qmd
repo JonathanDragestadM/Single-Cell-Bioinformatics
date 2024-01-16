@@ -251,7 +251,7 @@ Going forward, we will use the clustering at resolution 0.3.
 Idents(snRNAseq) <- "RNA_snn_res.0.3"
 ```
 
-UMAP:
+Non-linear dimensional reduction (UMAP):
 
 ```{r}
 snRNAseq <- RunUMAP(snRNAseq, 
