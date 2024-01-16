@@ -1,0 +1,93 @@
+---
+title: "04_celltyping"
+format: html
+editor: visual
+---
+
+## Cell type assignment
+
+```{r}
+rm(list = ls())
+```
+
+#### Librairy
+
+```{r, massage = False}
+
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(here)
+
+```
+
+#### Data Load
+
+```{r, massage = False}
+
+pbmc.data <- readRDS(file = "../data/snRNAseq_filted_clust.rds")
+
+```
+
+Dim plot
+
+```{r}
+
+DimPlot(pbmc.MTB, reduction = 'umap', group.by = 'timepoint')
+
+```
+
+#### Celltype assignemt
+
+find conserved markger genes acrocces clusters.
+
+```{r}
+DefaultAssay(immune.combined) <- "RNA"
+
+cluster0_conserved_markers <- FindConservedMarkers(immune.combined,
+                              ident.1 = 0,
+                              grouping.var = "timepoint",
+                              only.pos = TRUE,min.pct = 0.25,  min.diff.pct = 0.25,
+                      logfc.threshold = 0.25)
+
+#Load the table with gene descriptions to help you identify to what cell types the genes in the cluster can correspond to
+annotations <- read.csv("/home/projects/22102_single_cell/Day3/annotation.csv")
+
+# Combine markers with gene descriptions 
+cluster0_ann_markers <- cluster0_conserved_markers  |>  
+                rownames_to_column(var="gene") |> 
+                left_join(y = 
+                            unique(
+                              annotations[,c("gene_name", "description")]),
+                          by = c("gene" = "gene_name"))
+
+```
+
+```{r}
+
+immune.combined <- RenameIdents(object = immune.combined, 
+                                "0" = "CD4+ T cells",
+                                "1" = "CD8+ T cells",
+                                "2" = "CD4+ T cells",
+                                "3" = "NK cells",
+                                "4" = "Monocyte",
+                                "5" = "Monocyte",
+                                "6" = "T reg",
+                                "7" = "DC",
+                                "8" = "B cells",
+                                "9" = "Unknown",
+                                "10" = "Platelet",
+                                "11" = "Hematopoietic stem cells",
+                                "12" = "Plasma Cells")
+
+# Now, you can view the updated metadata
+head(immune.combined@meta.data)
+```
+
+```{r}
+# visualize data
+
+immune.combined$cell_type_1 <- Idents(immune.combined)
+
+DimPlot(immune.combined, reduction = 'umap', label = TRUE)
+```
