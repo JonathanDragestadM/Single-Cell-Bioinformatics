@@ -7,3 +7,9 @@ Single-Cell-Bioinformatics.Rproj
 .Rapp.history
 Single_Cell_Bioinformatics.Rproj
 HeleneProj.Rproj
+ATACseq/
+ArchRLogs/
+QualityControl/
+scATACseq_data/
+tmp/
+plots/
