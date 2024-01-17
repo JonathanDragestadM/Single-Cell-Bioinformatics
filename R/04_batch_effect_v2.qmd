@@ -1,0 +1,136 @@
+---
+title: "Checking Batch Effect for snRNA-seq Data (anchoring approach)"
+format: html
+---
+
+```{r}
+rm(list = ls())
+```
+
+Load the libraries:
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(clustree)
+```
+
+Load the seurat object:
+
+```{r}
+snRNAseq <- readRDS("../data/03_RNA_seurat")
+```
+
+## Check Batch Effect
+
+Create metadata variable for sample id:
+
+```{r}
+pattern <- "^[^_]*_[^_]*"
+snRNAseq[["sample_id"]] <- regmatches(
+  rownames(snRNAseq@meta.data), 
+  regexpr(pattern, rownames(snRNAseq@meta.data))
+  )
+```
+
+Check for batch effect:
+
+```{r}
+DimPlot(snRNAseq, 
+        reduction = "umap",
+        group.by = "sample_id")
+
+ggsave("../plots/04_batch_sample_id.png")
+```
+
+It looks split by condition. I will create a variable for the condition and check again:
+
+```{r}
+pattern <- "^[^_]*"
+snRNAseq[["condition"]] <- regmatches(
+  rownames(snRNAseq@meta.data), 
+  regexpr(pattern, rownames(snRNAseq@meta.data))
+  )
+
+DimPlot(snRNAseq, 
+        reduction = "umap",
+        group.by = "condition")
+
+ggsave("../plots/04_batch_condition.png")
+
+DimPlot(snRNAseq, 
+        reduction = "umap",
+        split.by = "condition")
+
+ggsave("../plots/04_batch_condition_split.png")
+```
+
+We will split the seurat object on the condition and then integrate the data.
+
+## Integration on samples
+
+The integration is based on this vignette: https://satijalab.org/seurat/archive/v4.3/integration_introduction
+
+Split the seurat object:
+
+```{r}
+snRNAseq.list <- SplitObject(snRNAseq, 
+                             split.by = "sample_id")
+```
+
+Perform integration:
+
+```{r}
+#| eval: false
+
+
+# normalize and identify variable features for each dataset independently
+snRNAseq.list <- lapply(X = snRNAseq.list, 
+                        FUN = function(x) {
+                          x <- NormalizeData(x)
+                          x <- FindVariableFeatures(x, 
+                                                    selection.method = "vst", 
+                                                    nfeatures = 2000)
+                     })
+
+# select features that are repeatedly variable across datasets for integration
+features <- SelectIntegrationFeatures(object.list = snRNAseq.list)
+
+anchors <- FindIntegrationAnchors(object.list = snRNAseq.list,
+                                  anchor.features = features)
+
+snRNAseq.integrated <- IntegrateData(anchorset = anchors,
+                                     dims = 1:16)
+```
+
+Try version from https://github.com/satijalab/seurat/issues/1889
+
+```{r}
+snRNAseq.list <- lapply(X = snRNAseq.list, 
+                        FUN = function(x) {
+                          x <- NormalizeData(x)
+                          x <- FindVariableFeatures(x, 
+                                                    selection.method = "vst", 
+                                                    nfeatures = 2000)
+                     })
+
+rna.names <- rownames(snRNAseq.list[[1]][["RNA"]])
+
+anchors <- FindIntegrationAnchors(
+  object.list = snRNAseq.list, 
+  assay = rep("RNA",length(snRNAseq.list)), 
+  anchor.features=rna.names, 
+  dims=1:16)
+
+snRNAseq.integrated <- IntegrateData(anchorset = anchors, 
+                             new.assay.name = "integrated_RNA", 
+                             dims=1:16)
+```
+
+
+Save object:
+
+```{r}
+#| eval: false
+saveRDS(anchors, file = "../data/04_anchors")
+```

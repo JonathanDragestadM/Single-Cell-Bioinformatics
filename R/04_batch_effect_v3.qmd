@@ -1,5 +1,5 @@
 ---
-title: "Checking Batch Effect for snRNA-seq Data"
+title: "Checking Batch Effect for snRNA-seq Data (rpca approach)"
 format: html
 ---
 
@@ -71,7 +71,7 @@ We will split the seurat object on the condition and then integrate the data.
 
 ## Integration on samples
 
-The integration is based on this vignette: https://satijalab.org/seurat/articles/integration_introduction
+The integration is based on this vignette: https://satijalab.org/seurat/articles/integration_introduction, but diverted from it and used rpca for itegration instead of cca, to make it run faster and because cca didn't work (version 1)
 
 Split the seurat object:
 
@@ -87,13 +87,21 @@ The seurat object was already split in 10 groups. This is probably an artifact f
 Perform integration:
 
 ```{r}
+options(future.globals.maxSize = 1000 * 1024^2)
+
 snRNAseq <- IntegrateLayers(object = snRNAseq, 
-                            method = CCAIntegration, 
+                            method = RPCAIntegration,
                             orig.reduction = "pca", 
-                            new.reduction = "integrated.cca",
+                            new.reduction = 'integrated.rpca',
+                            reference = 1, 
                             verbose = FALSE)
 
-# re-join layers after integration
+#snRNAseq <- IntegrateLayers(object = snRNAseq, 
+#                            method = HarmonyIntegration,
+#                            orig.reduction = "pca", 
+#                            new.reduction = "harmony",
+#                            verbose = FALSE)
+
 snRNAseq[["RNA"]] <- JoinLayers(snRNAseq[["RNA"]])
 ```
 
@@ -101,7 +109,7 @@ Dimensionality reduction and clustering:
 
 ```{r}
 snRNAseq <- FindNeighbors(snRNAseq, 
-                          reduction = "integrated.cca", 
+                          reduction = "integrated.rpca", 
                           dims = 1:16)
 
 snRNAseq <- FindClusters(snRNAseq,
@@ -119,7 +127,7 @@ Idents(snRNAseq) <- "RNA_snn_res.0.3"
 
 snRNAseq <- RunUMAP(snRNAseq, 
                     dims = 1:16,
-                    reduction = "integrated.cca")
+                    reduction = "integrated.rpca")
 
 DimPlot(snRNAseq, 
         reduction = "umap",
@@ -137,5 +145,8 @@ ggsave("../plots/04_batch_condition_split_integrated.png")
 Save object:
 
 ```{r}
-saveRDS(snRNAseq, file = "../data/04_RNA_seurat_cca_int")
+saveRDS(snRNAseq, file = "../data/04_RNA_seurat_rpca_int")
 ```
+
+The data is now integrated for the 10 samples, but we still see a clear clustering difference between the conditions. We will now split the data on the conditions and integrate that.
+
