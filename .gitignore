@@ -4,6 +4,8 @@ data/04_RNA_seurat
 data/04_RNA_seurat_rpca_int
 data/04_RNA_seurat_cca_int
 data/04_anchors
+data/04_RNA_seurat_v2
+data/05_RNA_seurat
 plots/
 papers/
 .Rhistory
@@ -18,4 +20,3 @@ QualityControl/
 scATACseq_data/
 tmp/
 plots/
-
