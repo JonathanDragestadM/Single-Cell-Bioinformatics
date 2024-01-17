@@ -14,4 +14,4 @@ Becker, W.R., Nevins, S.A., Chen, D.C. et al. Single-cell analyses define a cont
 
 1. 01_create_Seurat.qmd
 2. 03_QC_and_clustering.qmd
-3. 04_batch_effect_v3.qmd
+3. 04_batch_effect.qmd (don't use v2 or v3)

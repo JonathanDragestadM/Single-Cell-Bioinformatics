@@ -1,20 +1,15 @@
 ---
-title: "04_celltyping"
+title: "Cell type assignment"
 format: html
-editor: visual
 ---
-
-## Cell type assignment
 
 ```{r}
 rm(list = ls())
-
 ```
 
-#### Librairy
+Load the libraries:
 
-```{r, massage = False}
-
+```{r}
 library(dplyr)
 library(Seurat)
 library(patchwork)
@@ -29,59 +24,59 @@ library(metap)
 library(tibble)
 library(purrr)
 library(copykat)
+library(tidyverse)
 ```
 
-#### Data Load
-
-```{r, massage = False}
-
-snRNAseq <- readRDS("../data/04_RNA_seurat")
-
-```
-
-Dim plot
+Load the seurat object:
 
 ```{r}
-
-DimPlot(snRNAseq, reduction = 'umap', group.by = 'RNA_snn_res.0.1')
-
+snRNAseq <- readRDS("../data/04_RNA_seurat_cca_int")
 ```
 
-#### Marker genes cell typing
-
-find conserved markger genes acrocces clusters.
+UMAP:
 
 ```{r}
-Idents(snRNAseq) <- "RNA_snn_res.0.1"
+DimPlot(snRNAseq, 
+        reduction = 'umap')
+
+ggsave("../plots/05_UMAP_no_annotations.png")
+```
+
+## Manual (not done)
+
+Find conserved marker genes accross clusters:
+
+```{r}
+#| eval: false
+
 DefaultAssay(snRNAseq) <- "RNA"
 annotations <- read.csv("/home/projects/22102_single_cell/day3/annotation.csv")
 ```
 
+Find conserved markers for each cluster:
+
 ```{r}
+#| eval: false
 
-
-cluster0_conserved_markers <- FindConservedMarkers(snRNAseq,
-                              ident.1 = 0,
-                              grouping.var = "condition",
-                              only.pos = TRUE,min.pct = 0.25,  min.diff.pct = 0.25,
-                      logfc.threshold = 0.25)
-
-#Load the table with gene descriptions to help you identify to what cell types the genes in the cluster can correspond to
-
-
+cluster0_conserved_markers <- FindConservedMarkers(
+  snRNAseq,
+  ident.1 = 0,
+  grouping.var = "condition",
+  only.pos = TRUE,
+  min.pct = 0.25,  
+  min.diff.pct = 0.25,
+  logfc.threshold = 0.25)
 
 # Combine markers with gene descriptions 
 cluster0_ann_markers <- cluster0_conserved_markers  |>  
-                rownames_to_column(var="gene") |> 
-                left_join(y = 
-                            unique(
-                              annotations[,c("gene_name", "description")]),
-                          by = c("gene" = "gene_name"))
-
-cluster0_ann_markers$gene
+  rownames_to_column(var="gene") |> 
+  left_join(y = unique(annotations[,c("gene_name",
+                                      "description")]),
+            by = c("gene" = "gene_name"))
 ```
 
 ```{r}
+#| eval: false
 
 snRNAseq <- RenameIdents(object = snRNAseq, 
                                 "0" = "epithelial cells",
@@ -102,49 +97,63 @@ snRNAseq <- RenameIdents(object = snRNAseq,
 head(snRNAseq@meta.data)
 ```
 
+Visualize data:
+
 ```{r}
-# visualize data
+#| eval: false
 
 snRNAseq$cell_type_1 <- Idents(snRNAseq)
 
 DimPlot(snRNAseq, reduction = 'umap', label = TRUE)
 ```
 
-#### Singler R cell typing
+## SingleR (done)
+
+Preprare reference data and run SingleR:
 
 ```{r}
-
 ref <- HumanPrimaryCellAtlasData()
-```
 
-```{r}
-serat_ref <- readRDS("/home/projects/22102_single_cell/day3/pbmcsca.rds")
+snRNAseq.counts <- GetAssayData(snRNAseq, 
+                       assay = "RNA", 
+                       layer = 'counts')
 
-```
-
-```{r}
-ref <- as.SingleCellExperiment(serat_ref, assay = "RNA")
-
-pbmc_counts <- GetAssayData(snRNAseq, assay = "RNA", layer = 'counts')
-
-pred <- SingleR(test = pbmc_counts,
+pred <- SingleR(test = snRNAseq.counts,
                 ref = ref,
-                labels = ref$CellType,
+                labels = ref$label.main,
                 de.method="wilcox")
 
-snRNAseq$cell_type_2 <- pred$labels[match(rownames(snRNAseq@meta.data), rownames(pred))]
+snRNAseq$cell_type_singleR <- pred$labels[match(rownames(snRNAseq@meta.data), rownames(pred))]
 ```
 
-#### 
+UMAP:
 
-#### CopyKat
+```{r}
+DimPlot(snRNAseq, 
+        reduction = 'umap',
+        group.by = "cell_type_singleR")
 
-Extrac raw counts from the data
+ggsave("../plots/05_UMAP_SingleR.png")
+```
+
+Save object:
+
+```{r}
+saveRDS(snRNAseq, file = "../data/05_RNA_seurat_singleR_ann")
+```
+
+## CopyKat (not done)
+
+Load the seurat object:
+
+```{r}
+snRNAseq <- readRDS("../data/05_RNA_seurat_singleR_ann")
+```
+
+Extract raw counts from the data:
 
 ```{r, massage = False}
-
 exp.rawdata <- as.matrix(snRNAseq@assays$RNA$counts)
-
 ```
 
 Counts chormos by genes. Some parameters are\
@@ -156,8 +165,18 @@ low.DR: minum numbers of genes in fraction for something with smoothing\
 upper.DR: minumun number of genes in fraction for someting with seqments
 
 ```{r}
-copykat.test <- copykat(rawmat=exp.rawdata, id.type="S", ngene.chr=5, win.size=25, KS.cut=0.1, sam.name="test", distance="euclidean", norm.cell.names="",output.seg="FLASE", plot.genes="TRUE", genome="hg20",n.cores=1)
-
+copykat.test <- copykat(rawmat=exp.rawdata, 
+                        id.type="S", 
+                        ngene.chr=5, 
+                        win.size=25, 
+                        KS.cut=0.1, 
+                        sam.name="test", 
+                        distance="euclidean", 
+                        norm.cell.names="",
+                        output.seg="FALSE", 
+                        plot.genes="TRUE", 
+                        genome="hg20",
+                        n.cores=1)
 ```
 
 ```{r}
