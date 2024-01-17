@@ -12,7 +12,7 @@ rm(list = ls())
 
 #### Librairy
 
-```{r, massage = False}
+```{r, massage = False, warning=FALSE}
 library(Seurat)
 library(SingleCellExperiment)
 library(tradeSeq)
@@ -29,7 +29,7 @@ library(clustree)
 
 ```{r}
 snRNAseq <- readRDS("../data/05_RNA_seurat")
-
+snRNAseq <- readRDS("/home/people/puqu/projects/Single-Cell-Bioinformatics/data/04_RNA_seurat_cca_int")
 
 ```
 
@@ -99,7 +99,8 @@ pal <- c(RColorBrewer::brewer.pal(9, "Set1"), RColorBrewer::brewer.pal(8, "Set2"
 # Save the objects as separate matrices for input in slingshot
 dimred <- CD4T@reductions$umap@cell.embeddings
 clustering <- CD4T$RNA_snn_res.0.4
-counts <- as.matrix(CD4T@assays$RNA$counts[CD4T@assays$RNA@var.features, ])
+
+counts <- as.matrix(CD4T@assays$RNA$counts[!is.na(CD4T@assays$RNA[[]]$var.features), ])
 
 
 # Run default Slingshot lineage identification
@@ -107,4 +108,15 @@ set.seed(1)
 lineages <- getLineages(data = dimred, clusterLabels = clustering)
 
 lineages
+```
+
+```{r}
+# Plot the lineages
+par(mfrow = c(1, 2))
+plot(dimred[, 1:2], col = pal[clustering], cex = 0.5, pch = 16)
+for (i in levels(clustering)) {
+    text(mean(dimred[clustering == i, 1]), mean(dimred[clustering == i, 2]), labels = i, font = 2)
+}
+plot(dimred[, 1:2], col = pal[clustering], cex = 0.5, pch = 16)
+lines(SlingshotDataSet(lineages), lwd=2, type = 'lineages', col = c("black"))
 ```
