@@ -81,6 +81,9 @@ snRNAseq.list <- SplitObject(snRNAseq,
 Perform integration:
 
 ```{r}
+#| eval: false
+
+
 # normalize and identify variable features for each dataset independently
 snRNAseq.list <- lapply(X = snRNAseq.list, 
                         FUN = function(x) {
@@ -96,11 +99,38 @@ features <- SelectIntegrationFeatures(object.list = snRNAseq.list)
 anchors <- FindIntegrationAnchors(object.list = snRNAseq.list,
                                   anchor.features = features)
 
-snRNAseq.combined <- IntegrateData(anchorset = anchors)
+snRNAseq.integrated <- IntegrateData(anchorset = anchors,
+                                     dims = 1:16)
 ```
+
+Try version from https://github.com/satijalab/seurat/issues/1889
+
+```{r}
+snRNAseq.list <- lapply(X = snRNAseq.list, 
+                        FUN = function(x) {
+                          x <- NormalizeData(x)
+                          x <- FindVariableFeatures(x, 
+                                                    selection.method = "vst", 
+                                                    nfeatures = 2000)
+                     })
+
+rna.names <- rownames(snRNAseq.list[[1]][["RNA"]])
+
+anchors <- FindIntegrationAnchors(
+  object.list = snRNAseq.list, 
+  assay = rep("RNA",length(snRNAseq.list)), 
+  anchor.features=rna.names, 
+  dims=1:16)
+
+snRNAseq.integrated <- IntegrateData(anchorset = anchors, 
+                             new.assay.name = "integrated_RNA", 
+                             dims=1:16)
+```
+
 
 Save object:
 
 ```{r}
-saveRDS(snRNAseq.combined, file = "../data/04_RNA_seurat_v2")
+#| eval: false
+saveRDS(anchors, file = "../data/04_anchors")
 ```
