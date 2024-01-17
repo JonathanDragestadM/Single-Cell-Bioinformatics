@@ -1,0 +1,110 @@
+---
+title: "07_trajectory"
+format: html
+editor: visual
+---
+
+## Trajectory analysis
+
+```{r}
+rm(list = ls()) 
+```
+
+#### Librairy
+
+```{r, massage = False}
+library(Seurat)
+library(SingleCellExperiment)
+library(tradeSeq)
+library(dplyr)
+suppressPackageStartupMessages({
+  library(slingshot)
+})
+library(clustree)
+
+
+```
+
+#### Data Load
+
+```{r}
+snRNAseq <- readRDS("../data/05_RNA_seurat")
+
+
+```
+
+#### Explore CD4+ T
+
+```{r}
+
+CD4T <- subset(snRNAseq, (cell_type_2 == "CD4+ T cell"))
+
+```
+
+##### Drop old resulations
+
+```{r}
+CD4T@meta.data <- CD4T@meta.data[, -which(grepl("RNA_snn_res",colnames(CD4T@meta.data),fixed=TRUE))]
+```
+
+##### Albow from PCA
+
+```{r, massage = false}
+
+DefaultAssay(CD4T) <- "RNA"
+
+CD4T <- FindVariableFeatures(CD4T, selection.method = "vst", nfeatures = 2000)
+#Scale the data
+CD4T <- ScaleData(CD4T, features = VariableFeatures(object = CD4T))
+#Run PCA 
+CD4T <- RunPCA(CD4T, features = VariableFeatures(object = CD4T))
+ElbowPlot(CD4T) 
+```
+
+##### Find clusters
+
+from the albow 20 Deminions where chosen
+
+```{r}
+
+CD4T <- FindNeighbors(CD4T, dims = 1:20)
+#Cluster cells
+CD4T <- FindClusters(CD4T, resolution = c(0.2, 0.3,0.4,0.5,0.7))
+
+```
+
+##### Clustree determinate Resulution
+
+```{r}
+
+clustree(CD4T, prefix = "RNA_snn_res.")
+
+```
+
+##### Umap of CD4 clusters
+
+```{r}
+
+Idents(CD4T) <- "RNA_snn_res.0.4"
+CD4T <- RunUMAP(CD4T, dims = 1:20)
+
+DimPlot(CD4T, group.by = "RNA_snn_res.0.4", label = TRUE)
+```
+
+```{r}
+
+
+pal <- c(RColorBrewer::brewer.pal(9, "Set1"), RColorBrewer::brewer.pal(8, "Set2"))
+
+# Save the objects as separate matrices for input in slingshot
+dimred <- CD4T@reductions$umap@cell.embeddings
+clustering <- CD4T$RNA_snn_res.0.4
+counts <- as.matrix(CD4T@assays$RNA$counts[CD4T@assays$RNA@var.features, ])
+
+
+# Run default Slingshot lineage identification
+set.seed(1)
+lineages <- getLineages(data = dimred, clusterLabels = clustering)
+
+lineages
+```

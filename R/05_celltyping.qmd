@@ -35,7 +35,7 @@ library(purrr)
 
 ```{r, massage = False}
 
-snRNAseq <- readRDS("../data/04_integrated_seurat")
+snRNAseq <- readRDS("../data/04_RNA_seurat")
 
 ```
 
