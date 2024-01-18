@@ -22,3 +22,7 @@ QualityControl/
 scATACseq_data/
 tmp/
 plots/
+
+data/*
+R/test_copykat*
+
