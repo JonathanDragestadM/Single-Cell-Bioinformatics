@@ -25,17 +25,26 @@ library(DESeq2)
 ## Load data
 
 ```{r}
-data <- readRDS("/home/people/s184243/22102_ascb/Single_Cell_Bioinformatics/data/05_RNA_seurat")
+# data <- readRDS("/home/people/s184243/22102_ascb/Single_Cell_Bioinformatics/data/05_RNA_seurat")
+data <- readRDS("/home/people/puqu/projects/Single-Cell-Bioinformatics/data/05_RNA_seurat_singleR_subset_ann")
+```
+
+## Subset
+```{r}
+# data.sub <- subset(data, subset = cell_type_singleR %in% c('T_cells', 'Epithelial_cells', 'Endothelial_cells'))
 ```
 
 ## Crate seurate graph
-
 ```{r}
 data <- RunPCA(data, npcs = 30, verbose = FALSE)
 ElbowPlot(data)
 data <- RunUMAP(data, reduction = "pca", dims = 1:16)
 data <- FindNeighbors(data, return.neighbor = TRUE, reduction = 'pca', dims = 1:16, features = VariableFeatures(object = data))
 data <- FindClusters(data, resolution = 0.5)
+DimPlot(data,
+        #label = TRUE,
+        group.by = "cell_type_singleR", 
+        split.by = 'condition')  
 ```
 
 ## Create SingleCellExperiment-object
@@ -49,7 +58,7 @@ DefaultAssay(data) <- "RNA"
 
 ```{r}
 # abundances <- table(sce$cell_type_2, sce$sample_id) 
-abundances <- table(data[[]]$cell_type_2, data[[]]$sample_id) 
+abundances <- table(data[[]]$cell_type_singleR, data[[]]$sample_id) 
 abundances <- unclass(abundances) 
 head(abundances)
 ```
@@ -57,14 +66,14 @@ head(abundances)
 ## Create count matrix
 
 ```{r}
-knn_mat = knn_simMat(data@graphs$RNA_snn, data[[]]$cell_type_2)
+knn_mat = knn_simMat(data@graphs$RNA_snn, data[[]]$cell_type_singleR)
 print(knn_mat)
 ```
 
 Do something that makes sense with the groups.
 
 ```{r}
-count_mat = table(data[[]]$sample_id, data[[]]$cell_type_2)
+count_mat = table(data[[]]$sample_id, data[[]]$cell_type_singleR)
 count_mat
 ```
 
@@ -85,7 +94,7 @@ dcats_GLM(count_mat, sim_design, knn_mat)
 # Aggregate counts to sample level
 
 counts <- AggregateExpression(data, 
-                              group.by = c("RNA_snn_res.0.1", "sample_id"),
+                              group.by = c("cell_type_singleR", "sample_id"),
                               assays =  "RNA",
                               return.seurat = FALSE)
 
@@ -109,153 +118,144 @@ cts.split.modified <- lapply(cts.split, function(x){
   t(x)
   
 })
-
-# 1. Get counts matrix
-counts_monocytes <- cts.split.modified$g0
-
-
-# 2. generate sample level metadata
-colData <- data.frame(samples = colnames(counts_monocytes))
-
-colData <- colData %>%
-  mutate(condition = ifelse(grepl('CRC', samples), 'CRC', 'Normal')) %>%
-  column_to_rownames(var = 'samples')
-
-
-# perform DESeq2 --------
-# Create DESeq2 object   
-dds <- DESeqDataSetFromMatrix(countData = counts_monocytes,
-                              colData = colData,
-                              design = ~ condition)
-
-#skip this step, it loads the created matrix from previous step(To be able to knit Rmd)
-# dds<- readRDS("/net/pupil1/home/people/andson/dds.rds")
-
-# filter
-keep <- rowSums(counts(dds)) >=10
-dds <- dds[keep,]
-
-# run DESeq2
-dds <- DESeq(dds)
-
-# Check the coefficients for the comparison
-resultsNames(dds)
 ```
 
 ```{r}
-# Generate results object
-res <- results(dds, name = "condition_Normal_vs_CRC")
-res2 <- as.data.frame(res)
 
-summary(res)
-```
-
-```{r}
-# Turn the DESeq2 results object into a tibble for use with tidyverse functions
-res_tbl <- res %>%
-  data.frame() %>%
-  rownames_to_column(var = "gene") %>%
-  as_tibble() %>%
-  arrange(padj)
-
-# Check results output
-res_tbl 
-```
-
-```{r}
-# Set thresholds
-padj_cutoff <- 0.005
-
-# Subset the significant results
-sig_res <- dplyr::filter(res_tbl, padj < padj_cutoff) %>%
-  dplyr::arrange(padj)
-
-# Check significant genes output
-sig_res
-```
-
-```{r}
-## Order results by padj values
-top20_sig_genes <- sig_res %>%
-  dplyr::arrange(padj) %>%
-  dplyr::pull(gene) %>%
-  head(n=20)
-
-## Order results by log fold change
-top20_sig_genes <- sig_res %>%
-  dplyr::arrange(log2FoldChange) %>%
-  dplyr::pull(gene) %>%
-  head(n=20)
-```
-
-## GSEA
-
-```{r}
-library(fgsea)
-gsList <- readRDS("/home/projects/22102_single_cell/day5/gene_sets.Rds")
-
-res$genes <- rownames(res)
-
-#Add EntrezID for the genes
-library(org.Hs.eg.db)
-Entrez <- AnnotationDbi::select(org.Hs.eg.db,
-                                    key=res$genes, 
-                                    columns="ENTREZID",
-                                    keytype="SYMBOL")
-Entrez <- as_tibble(Entrez)
-
-#Ranking data
-res<- as.data.frame(res)
-
-res <- inner_join(res, Entrez, by=c("genes"="SYMBOL"))
-
-#Create new metric
-res$stat_sig <- -log10(res$pvalue) * sign(res$log2FoldChange)
-
-
-#Remove those genes that do not have an entrezid
-res2 <- filter(res, !is.na(ENTREZID))
-
-rankData <- res2$stat_sig
-names(rankData) <- res2$genes
-rankData <- na.omit(rankData)
-head(rankData)
-
-```
-
-```{r}
-#Running fgsea algorithm:
-fgseaRes <- fgsea(pathways=gsList, stats=rankData)
-# Warning: There are ties in the preranked stats (0.26% of the list).
-
-#Tidy the results
-fgseaResTidy <- fgseaRes %>%
-  as_tibble() %>%
-  arrange(desc(NES))
-
-
-#Plot the top 10 upregulated/downregulated genes after stimulation
-
-# Sort the data frame based on NES in descending order to get top 10 pathways
-top_10 <- fgseaResTidy %>%
-  arrange(desc(NES)) %>%
-  head(10)
-
-# Sort the data frame based on NES in ascending order to get bottom 10 pathways
-bottom_10 <- fgseaResTidy %>%
-  arrange(NES) %>%
-  head(10)
-
-# Combine top 10 and bottom 10 pathways
-top_bottom_10 <- rbind(top_10, bottom_10)
-
-
-ggplot(top_bottom_10, aes(reorder(pathway, NES), NES)) +
-  geom_col(aes(fill=padj<0.05)) +
-  coord_flip() +
-  labs(x="Pathway", y="Normalized Enrichment Score",
-       title="Top 10 and Bottom 10 Hallmark pathways based on Absolute NES from GSEA") + 
-  theme_minimal()
+dge <- function(celltype){
+  # 1. Get counts matrix
+  counts <- cts.split.modified[[celltype]]
+  
+  # 2. generate sample level metadata
+  colData <- data.frame(samples = colnames(counts))
+  
+  colData <- colData %>%
+    mutate(condition = ifelse(grepl('CRC', samples), 'CRC', 'Normal')) %>%
+    column_to_rownames(var = 'samples')
+  
+  
+  # perform DESeq2 --------
+  # Create DESeq2 object   
+  dds <- DESeqDataSetFromMatrix(countData = counts,
+                                colData = colData,
+                                design = ~ condition)
+  
+  #skip this step, it loads the created matrix from previous step(To be able to knit Rmd)
+  # dds<- readRDS("/net/pupil1/home/people/andson/dds.rds")
+  
+  # filter
+  keep <- rowSums(counts(dds)) >=10
+  dds <- dds[keep,]
+  
+  # run DESeq2
+  dds <- DESeq(dds)
+  
+  # Check the coefficients for the comparison
+  resultsNames(dds)
+  
+  # Generate results object
+  res <- results(dds, name = "condition_Normal_vs_CRC")
+  res2 <- as.data.frame(res)
+  
+  summary(res)
+  
+  # Turn the DESeq2 results object into a tibble for use with tidyverse functions
+  res_tbl <- res %>%
+    data.frame() %>%
+    rownames_to_column(var = "gene") %>%
+    as_tibble() %>%
+    arrange(padj)
+  
+  # Check results output
+  res_tbl 
+  
+  # Set thresholds
+  padj_cutoff <- 0.005
+  
+  # Subset the significant results
+  sig_res <- dplyr::filter(res_tbl, padj < padj_cutoff) %>%
+    dplyr::arrange(padj)
+  
+  # Check significant genes output
+  sig_res
+  
+  ## Order results by padj values
+  top20_sig_genes <- sig_res %>%
+    dplyr::arrange(padj) %>%
+    dplyr::pull(gene) %>%
+    head(n=20)
+  
+  ## Order results by log fold change
+  top20_sig_genes <- sig_res %>%
+    dplyr::arrange(log2FoldChange) %>%
+    dplyr::pull(gene) %>%
+    head(n=20)
+  
+  library(fgsea)
+  gsList <- readRDS("/home/projects/22102_single_cell/day5/gene_sets.Rds")
+  
+  res$genes <- rownames(res)
+  
+  #Add EntrezID for the genes
+  library(org.Hs.eg.db)
+  Entrez <- AnnotationDbi::select(org.Hs.eg.db,
+                                      key=res$genes, 
+                                      columns="ENTREZID",
+                                      keytype="SYMBOL")
+  Entrez <- as_tibble(Entrez)
+  
+  #Ranking data
+  res<- as.data.frame(res)
+  
+  res <- inner_join(res, Entrez, by=c("genes"="SYMBOL"))
+  
+  #Create new metric
+  res$stat_sig <- -log10(res$pvalue) * sign(res$log2FoldChange)
+  
+  
+  #Remove those genes that do not have an entrezid
+  res2 <- filter(res, !is.na(ENTREZID))
+  
+  rankData <- res2$stat_sig
+  names(rankData) <- res2$genes
+  rankData <- na.omit(rankData)
+  head(rankData)
+  
+  #Running fgsea algorithm:
+  fgseaRes <- fgsea(pathways=gsList, stats=rankData)
+  # Warning: There are ties in the preranked stats (0.26% of the list).
+  
+  #Tidy the results
+  fgseaResTidy <- fgseaRes %>%
+    as_tibble() %>%
+    arrange(desc(NES))
+  
+  
+  #Plot the top 10 upregulated/downregulated genes after stimulation
+  
+  # Sort the data frame based on NES in descending order to get top 10 pathways
+  top_10 <- fgseaResTidy %>%
+    arrange(desc(NES)) %>%
+    head(10)
+  
+  # Sort the data frame based on NES in ascending order to get bottom 10 pathways
+  bottom_10 <- fgseaResTidy %>%
+    arrange(NES) %>%
+    head(10)
+  
+  # Combine top 10 and bottom 10 pathways
+  top_bottom_10 <- rbind(top_10, bottom_10)
+  
+  
+  ggplot(top_bottom_10, aes(reorder(pathway, NES), NES)) +
+    geom_col(aes(fill=padj<0.05)) +
+    coord_flip() +
+    labs(x="Pathway", y="Normalized Enrichment Score",
+         title="Top 10 and Bottom 10 Hallmark pathways based on Absolute NES from GSEA") + 
+    theme_minimal()
+  
+  ggsave(glue('../plot/06_gsea_{celltype}.png'))
+}
 ```
 
 ## Differential cell-cell communication
@@ -266,10 +266,14 @@ library(patchwork)
 library(future)
 options(stringsAsFactors = FALSE)
 
+data_crc <- subset(data, subset = condition == 'CRC')
+data_norm <- subset(data, subset = condition == 'norm')
+
 Idents(data)
 
 #Create a CellChat object
-cellchat <- createCellChat(object = data, meta = data@meta.data, group.by = "cell_type_2")
+cellchat_crc <- createCellChat(object = data_crc, meta = data_crc@meta.data, group.by = "cell_type_singleR")
+cellchat_norm <- createCellChat(object = data_norm, meta = data_norm@meta.data, group.by = "cell_type_singleR")
 
 #Checkmetadata
 
@@ -287,37 +291,91 @@ CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling") # use Secr
 #CellChatDB.use <- CellChatDB # simply use the default CellChatDB
 
 # set the used database in the object
-cellchat@DB <- CellChatDB.use
+cellchat_crc@DB <- CellChatDB.use
+cellchat_norm@DB <- CellChatDB.use
 
 #Pre-processing the expression data for cell-cell communication nanalysis
 # subset the expression data of signaling genes for saving computation cost
-cellchat <- subsetData(cellchat) # This step is necessary even if using the whole database
+cellchat_crc <- subsetData(cellchat_crc) # This step is necessary even if using the whole database
+cellchat_norm <- subsetData(cellchat_norm)
 future::plan("multisession", workers = 4) # do parallel
-cellchat <- identifyOverExpressedGenes(cellchat)
-cellchat <- identifyOverExpressedInteractions(cellchat)
+cellchat_crc <- identifyOverExpressedGenes(cellchat_crc)
+cellchat_crc <- identifyOverExpressedInteractions(cellchat_crc)
+cellchat_norm <- identifyOverExpressedGenes(cellchat_norm)
+cellchat_norm <- identifyOverExpressedInteractions(cellchat_norm)
 
 
 #Part II: Inference of cell-cell communication network
-cellchat <- computeCommunProb(cellchat)
+cellchat_crc <- computeCommunProb(cellchat_crc)
+cellchat_norm <- computeCommunProb(cellchat_norm)
 # Filter out the cell-cell communication if there are only few number of cells in certain cell groups
-cellchat <- filterCommunication(cellchat, min.cells = 10)
-
+cellchat_crc <- filterCommunication(cellchat_crc, min.cells = 10)
+cellchat_norm <- filterCommunication(cellchat_norm, min.cells = 10)
 
 #Extract the inferred cellular communication network as a data frame
-df.net <- subsetCommunication(cellchat)
-df.net <- subsetCommunication(cellchat) #returns a data frame consisting of all the inferred cell-cell communications at the level of ligands/receptors. Set slot.name = "netP" to access the the inferred communications at the level of signaling pathways
+df.net_crc <- subsetCommunication(cellchat_crc)
+df.net_norm <- subsetCommunication(cellchat_norm) #returns a data frame consisting of all the inferred cell-cell communications at the level of ligands/receptors. Set slot.name = "netP" to access the the inferred communications at the level of signaling pathways
 
 
 #df.net <- subsetCommunication(cellchat, signaling = c("TNF", "TGFb")) #gives the inferred cell-cell communications mediated by signaling WNT and TGFb.
 
 #Infer the cell-cell communication at a signaling pathway level
 
-cellchat <- computeCommunProbPathway(cellchat)
+cellchat_crc <- computeCommunProbPathway(cellchat_crc)
+cellchat_norm <- computeCommunProbPathway(cellchat_norm)
 
+# CRC
 #Calculate the aggregated cell-cell communication network
-cellchat <- aggregateNet(cellchat)
-groupSize <- as.numeric(table(cellchat@idents))
+cellchat_crc <- aggregateNet(cellchat_crc)
+groupSize <- as.numeric(table(cellchat_crc@idents))
 par(mfrow = c(1,2), xpd=TRUE)
-netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
-netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+netVisual_circle(cellchat_crc@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "CRC: Number of interactions")
+netVisual_circle(cellchat_crc@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "CRC: Interaction weights/strength")
 ```
+
+```{r}
+# NORM
+#Calculate the aggregated cell-cell communication network
+cellchat_norm <- aggregateNet(cellchat_norm)
+groupSize <- as.numeric(table(cellchat_norm@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat_norm@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Norm: Number of interactions")
+netVisual_circle(cellchat_norm@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Norm: Interaction weights/strength")
+```
+
+```{r}
+# CRC
+pathways <- cellchat_crc@netP$pathways
+
+#Part III: Visualization of cell-cell communication network
+pathways.show <- c("SEMA3")
+
+# Circle plot
+par(mfrow=c(1,1))
+netVisual_aggregate(cellchat_crc, signaling = pathways.show, layout = "circle")
+```
+
+```{r}
+# Norm
+pathways <- cellchat_norm@netP$pathways
+
+#Part III: Visualization of cell-cell communication network
+pathways.show <- c("SEMA3") 
+
+# Circle plot
+par(mfrow=c(1,1))
+netVisual_aggregate(cellchat_norm, signaling = pathways.show, layout = "circle")
+```
+
+```{r}
+# CRC: Heatmap
+par(mfrow=c(1,1))
+netVisual_heatmap(cellchat_crc, signaling = pathways.show, color.heatmap = "Reds")
+```
+
+```{r}
+# Norm: Heatmap
+par(mfrow=c(1,1))
+netVisual_heatmap(cellchat_norm, signaling = pathways.show, color.heatmap = "Reds")
+```
+
