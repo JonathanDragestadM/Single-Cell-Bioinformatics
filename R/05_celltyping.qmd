@@ -36,13 +36,15 @@ snRNAseq <- readRDS("../data/04_RNA_seurat_cca_int")
 UMAP:
 
 ```{r}
-DimPlot(snRNAseq, 
-        reduction = 'umap')
+p1 <- DimPlot(snRNAseq,
+              reduction = 'umap')
+
+p1
 
 ggsave("../plots/05_UMAP_no_annotations.png")
 ```
 
-## Manual (not done)
+## Manual (not using this anymore)
 
 Find conserved marker genes accross clusters:
 
@@ -107,12 +109,35 @@ snRNAseq$cell_type_1 <- Idents(snRNAseq)
 DimPlot(snRNAseq, reduction = 'umap', label = TRUE)
 ```
 
-## SingleR (done)
+## SingleR 
 
 Preprare reference data and run SingleR:
 
 ```{r}
 ref <- HumanPrimaryCellAtlasData()
+
+# subset from Becker GitHub
+types_to_use <- c(
+  "DC",
+  "Epithelial_cells",
+  "B_cell",
+  "Neutrophils",
+  "T_cells",
+  "Monocyte",
+	"Endothelial_cells",
+  "Neurons",
+  "Macrophage",
+  "NK_cell",
+	"BM",
+  "Platelets",
+  "Fibroblasts",
+  "Astrocyte",
+  "Myelocyte",
+  "Pre-B_cell_CD34-",
+  "Pro-B_cell_CD34+",
+  "Pro-Myelocyte")
+
+ref <- ref[,(colData(ref)$label.main %in% types_to_use)]
 
 snRNAseq.counts <- GetAssayData(snRNAseq, 
                        assay = "RNA", 
@@ -129,26 +154,33 @@ snRNAseq$cell_type_singleR <- pred$labels[match(rownames(snRNAseq@meta.data), ro
 UMAP:
 
 ```{r}
-DimPlot(snRNAseq, 
+p2 <- DimPlot(snRNAseq, 
         reduction = 'umap',
         group.by = "cell_type_singleR")
 
-ggsave("../plots/05_UMAP_SingleR.png")
+p2
+
+ggsave("../plots/05_UMAP_SingleR_subset.png")
 ```
 
 Save object:
 
 ```{r}
-saveRDS(snRNAseq, file = "../data/05_RNA_seurat_singleR_ann")
+saveRDS(snRNAseq, file = "../data/05_RNA_seurat_singleR_subset_ann")
 ```
 
-## CopyKat (not done)
-
-Load the seurat object:
+Arrange plots for presentation:
 
 ```{r}
-snRNAseq <- readRDS("../data/05_RNA_seurat_singleR_ann")
+(p1 + NoLegend() + labs(title = "clusters") + theme(plot.title.position = "plot")) + (p2 + NoLegend() + labs(title = "singleR") + theme(axis.text.y = element_blank(), axis.title.y = element_blank(), plot.title.position = "plot"))
+
+ggsave("../plots/05_clusters_vs_singleR.png", 
+       width = 14, 
+       height = 7)
 ```
+
+
+## CopyKat
 
 Extract raw counts from the data:
 
