@@ -1,7 +1,6 @@
 ---
 title: "Differential abundance and differential gene expression + GSEA"
 format: html
-editor: visual
 ---
 
 ## Differenital Abundance and Differential Gene Expression + GSEA
@@ -26,15 +25,17 @@ library(DESeq2)
 
 ```{r}
 # data <- readRDS("/home/people/s184243/22102_ascb/Single_Cell_Bioinformatics/data/05_RNA_seurat")
-data <- readRDS("/home/people/puqu/projects/Single-Cell-Bioinformatics/data/05_RNA_seurat_singleR_subset_ann")
+data <- readRDS("/home/people/s165827/22102/HeleneProj/data/05_RNA_seurat_singleR_subset_ann")
 ```
 
 ## Subset
+
 ```{r}
 # data.sub <- subset(data, subset = cell_type_singleR %in% c('T_cells', 'Epithelial_cells', 'Endothelial_cells'))
 ```
 
 ## Crate seurate graph
+
 ```{r}
 data <- RunPCA(data, npcs = 30, verbose = FALSE)
 ElbowPlot(data)
@@ -266,48 +267,49 @@ library(patchwork)
 library(future)
 options(stringsAsFactors = FALSE)
 
-data_crc <- subset(data, subset = condition == 'CRC')
-data_norm <- subset(data, subset = condition == 'norm')
+# split data into CRC and normal
+data_crc <- subset(data, 
+                   subset = condition == 'CRC')
+data_norm <- subset(data, 
+                    subset = condition == 'norm')
 
-Idents(data)
+# create CellChat objects
+cellchat_crc <- createCellChat(object = data_crc, 
+                               meta = data_crc@meta.data, 
+                               group.by = "cell_type_singleR")
+cellchat_norm <- createCellChat(object = data_norm, 
+                                meta = data_norm@meta.data, 
+                                group.by = "cell_type_singleR")
 
-#Create a CellChat object
-cellchat_crc <- createCellChat(object = data_crc, meta = data_crc@meta.data, group.by = "cell_type_singleR")
-cellchat_norm <- createCellChat(object = data_norm, meta = data_norm@meta.data, group.by = "cell_type_singleR")
-
-#Checkmetadata
-
-#Set interaction-ligand database
+# set interaction-ligand database
 CellChatDB <- CellChatDB.human 
-```
 
-```{r}
-# Show the structure of the database
-dplyr::glimpse(CellChatDB$interaction)
+# show the structure of the database
+glimpse(CellChatDB$interaction)
 
 # use a subset of CellChatDB for cell-cell communication analysis
-CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling") # use Secreted Signaling
-#use all CellChatDB for cell-cell communication analysis
-#CellChatDB.use <- CellChatDB # simply use the default CellChatDB
+CellChatDB.use <- subsetDB(CellChatDB, 
+                           search = "Secreted Signaling") 
 
 # set the used database in the object
 cellchat_crc@DB <- CellChatDB.use
 cellchat_norm@DB <- CellChatDB.use
 
-#Pre-processing the expression data for cell-cell communication nanalysis
+#Pre-processing the expression data for cell-cell communication analysis
 # subset the expression data of signaling genes for saving computation cost
-cellchat_crc <- subsetData(cellchat_crc) # This step is necessary even if using the whole database
+cellchat_crc <- subsetData(cellchat_crc) 
 cellchat_norm <- subsetData(cellchat_norm)
+
 future::plan("multisession", workers = 4) # do parallel
 cellchat_crc <- identifyOverExpressedGenes(cellchat_crc)
 cellchat_crc <- identifyOverExpressedInteractions(cellchat_crc)
 cellchat_norm <- identifyOverExpressedGenes(cellchat_norm)
 cellchat_norm <- identifyOverExpressedInteractions(cellchat_norm)
 
-
 #Part II: Inference of cell-cell communication network
 cellchat_crc <- computeCommunProb(cellchat_crc)
 cellchat_norm <- computeCommunProb(cellchat_norm)
+
 # Filter out the cell-cell communication if there are only few number of cells in certain cell groups
 cellchat_crc <- filterCommunication(cellchat_crc, min.cells = 10)
 cellchat_norm <- filterCommunication(cellchat_norm, min.cells = 10)
@@ -341,6 +343,13 @@ groupSize <- as.numeric(table(cellchat_norm@idents))
 par(mfrow = c(1,2), xpd=TRUE)
 netVisual_circle(cellchat_norm@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Norm: Number of interactions")
 netVisual_circle(cellchat_norm@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Norm: Interaction weights/strength")
+```
+
+Save cell chat objects:
+
+```{r}
+saveRDS(cellchat_crc, file = "../results/cellchat_crc")
+saveRDS(cellchat_norm, file = "../results/cellchat_norm")
 ```
 
 ```{r}
@@ -378,4 +387,3 @@ netVisual_heatmap(cellchat_crc, signaling = pathways.show, color.heatmap = "Reds
 par(mfrow=c(1,1))
 netVisual_heatmap(cellchat_norm, signaling = pathways.show, color.heatmap = "Reds")
 ```
-

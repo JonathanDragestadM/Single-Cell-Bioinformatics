@@ -9,6 +9,7 @@ data/05_RNA_seurat
 data/05_RNA_seurat_singleR_ann
 data/05_RNA_seurat_singleR_subset_ann
 plots/
+results/
 papers/
 .Rhistory
 .Rproj.user
