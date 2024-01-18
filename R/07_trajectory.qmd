@@ -12,7 +12,7 @@ rm(list = ls())
 
 #### Librairy
 
-```{r, massage = False}
+```{r, massage = False, warning = FALSE}
 library(Seurat)
 library(SingleCellExperiment)
 library(tradeSeq)
@@ -28,16 +28,31 @@ library(clustree)
 #### Data Load
 
 ```{r}
-snRNAseq <- readRDS("../data/05_RNA_seurat")
+
+snRNAseq <- readRDS("../data/05_RNA_seurat_singleR_ann")
 
 
+```
+
+```{r}
+cell_interst <- c(
+  "Endothelial_cells",
+  "Epithelial_cells",
+  "T_cells",
+  "HSC_-G-CSF",
+  "Platelets")
 ```
 
 #### Explore CD4+ T
 
 ```{r}
 
-CD4T <- subset(snRNAseq, (cell_type_2 == "CD4+ T cell"))
+CD4T <- subset(snRNAseq,
+               (cell_type_singleR == cell_interst[2] &
+                          condition == "CRC"))
+
+# CD4T <- subset(snRNAseq,
+#                (cell_type_singleR == cell_interst[2]))
 
 ```
 
@@ -67,7 +82,7 @@ from the albow 20 Deminions where chosen
 
 ```{r}
 
-CD4T <- FindNeighbors(CD4T, dims = 1:20)
+CD4T <- FindNeighbors(CD4T, dims = 1:40)
 #Cluster cells
 CD4T <- FindClusters(CD4T, resolution = c(0.2, 0.3,0.4,0.5,0.7))
 
@@ -85,10 +100,14 @@ clustree(CD4T, prefix = "RNA_snn_res.")
 
 ```{r}
 
-Idents(CD4T) <- "RNA_snn_res.0.4"
-CD4T <- RunUMAP(CD4T, dims = 1:20)
+Idents(CD4T) <- "RNA_snn_res.0.7"
+CD4T <- RunUMAP(CD4T, dims = 1:40)
 
-DimPlot(CD4T, group.by = "RNA_snn_res.0.4", label = TRUE)
+DimPlot(CD4T, group.by = "RNA_snn_res.0.7", label = TRUE)
+```
+
+```{r}
+DimPlot(CD4T, group.by = "condition", label = TRUE)
 ```
 
 ```{r}
@@ -99,7 +118,8 @@ pal <- c(RColorBrewer::brewer.pal(9, "Set1"), RColorBrewer::brewer.pal(8, "Set2"
 # Save the objects as separate matrices for input in slingshot
 dimred <- CD4T@reductions$umap@cell.embeddings
 clustering <- CD4T$RNA_snn_res.0.4
-counts <- as.matrix(CD4T@assays$RNA$counts[CD4T@assays$RNA@var.features, ])
+
+counts <- as.matrix(CD4T@assays$RNA$counts[!is.na(CD4T@assays$RNA[[]]$var.features), ])
 
 
 # Run default Slingshot lineage identification
@@ -108,3 +128,184 @@ lineages <- getLineages(data = dimred, clusterLabels = clustering)
 
 lineages
 ```
+
+```{r}
+# Plot the lineages
+par(mfrow = c(1, 2))
+plot(dimred[, 1:2], col = pal[clustering], cex = 0.5, pch = 16)
+for (i in levels(clustering)) {
+    text(mean(dimred[clustering == i, 1]), mean(dimred[clustering == i, 2]), labels = i, font = 2)
+}
+plot(dimred[, 1:2], col = pal[clustering], cex = 0.5, pch = 16)
+lines(SlingshotDataSet(lineages), lwd=2, type = 'lineages', col = c("black"))
+```
+
+```{r}
+set.seed(1)
+lineages <- getLineages(data = dimred,
+                        clusterLabels = clustering,
+                        #end.clus = c("1","4","2"), #define how many branches/lineages to consider
+                        start.clus = "0") #define where to start the trajectories
+
+lineages
+```
+
+```{r}
+
+par(mfrow=c(1,2))
+plot(dimred[,1:2], col = pal[clustering],  cex=.5,pch = 16)
+for(i in levels(clustering)){ 
+  text( mean(dimred[clustering==i,1]),
+        mean(dimred[clustering==i,2]), labels = i,font = 2) }
+plot(dimred, col = pal[clustering],  pch = 16)
+lines(SlingshotDataSet(lineages), lwd = 3,  type = 'lineages', col = 'black')
+```
+
+```{r}
+curves <- getCurves(SlingshotDataSet(lineages), approx_points = 300, thresh = 0.01, stretch = 0.8, allow.breaks = FALSE, shrink = 0.99)
+curves
+```
+
+```{r}
+plot(dimred, col = pal[clustering], asp = 1, pch = 16)
+lines(SlingshotDataSet(curves), lwd = 3, col = "black")
+```
+
+```{r}
+counts <- as.matrix(CD4T@assays$RNA$counts[!is.na(CD4T@assays$RNA[[]]$var.features), ])
+
+# Removing some genes to speed up the computations 
+#For a gene to be retained (not removed), its expression level (greater than 4) should be observed in at least 1% of all the samples.
+dim(counts)
+```
+
+```{r}
+filt_counts <- counts[rowSums(counts > 5) > ncol(counts)/100, ]
+dim(filt_counts)
+```
+
+```{r}
+filt_counts <- as.matrix(filt_counts)
+
+set.seed(10)
+icMat <- evaluateK(counts = filt_counts, sds = curves, k = 3:10, 
+                   nGenes = 54, verbose = T)
+```
+
+```{r}
+set.seed(7)
+pseudotime <- slingPseudotime(curves, na = FALSE)
+cellWeights <- slingCurveWeights(curves)
+sce <- fitGAM(counts = filt_counts, pseudotime = pseudotime, cellWeights = cellWeights,
+                 nknots = 10, verbose = FALSE)
+
+#Genes that change with pseudotime
+assoRes <- associationTest(sce)
+assoRes <- arrange(assoRes,desc(pvalue))
+head(assoRes)
+```
+
+we find myo5b which is a cancer reltated gene
+
+https://pubmed.ncbi.nlm.nih.gov/36316444/
+
+```{r}
+#Discovering progenitor marker genes
+startRes <- startVsEndTest(sce)
+
+#We can visualize estimated smoothers for the second most significant gene.
+oStart <- order(startRes$waldStat, decreasing = TRUE)
+sigGeneStart <- names(sce)[oStart[2]]
+#Which gene?
+sigGeneStart
+```
+
+```{r}
+exp.rawdata <- as.matrix(CD4T@assays$RNA$counts)
+dim(exp.rawdata)
+dim(exp.rawdata[,1:100])
+```
+
+```{r}
+options(bitmapType='cairo')
+copykat.epicells <- copykat(rawmat=exp.rawdata[,1:100], 
+                        id.type="S", 
+                        ngene.chr=5, 
+                        win.size=25, 
+                        KS.cut=0.1, 
+                        sam.name="test", 
+                        distance="euclidean", 
+                        norm.cell.names="",
+                        output.seg="FALSE", 
+                        plot.genes=FALSE, 
+                        genome="hg20",
+                        n.cores=8)
+saveRDS(copykat.epicells, file = "../data/07_copykat.epicells")
+```
+
+```{r}
+
+
+sample_to_run_3 <- subset(snRNAseq,
+               (sample_id == "CRC_3"))
+exp.rawdata <- as.matrix(sample_to_run_3@assays$RNA$counts)
+
+options(bitmapType='cairo')
+copykat.sample_3 <- copykat(rawmat=exp.rawdata, 
+                        id.type="S", 
+                        ngene.chr=5, 
+                        win.size=25, 
+                        KS.cut=0.1, 
+                        sam.name="test", 
+                        distance="euclidean", 
+                        norm.cell.names="",
+                        output.seg="FALSE", 
+                        plot.genes=FALSE, 
+                        genome="hg20",
+                        n.cores=8)
+saveRDS(copykat.sample_3, file = "../data/07_copykat_sample_to_run_3")
+
+
+
+
+sample_to_run_4 <- subset(snRNAseq,
+               (sample_id == "CRC_4"))
+exp.rawdata <- as.matrix(sample_to_run_4@assays$RNA$counts)
+
+options(bitmapType='cairo')
+copykat.sample_4 <- copykat(rawmat=exp.rawdata, 
+                        id.type="S", 
+                        ngene.chr=5, 
+                        win.size=25, 
+                        KS.cut=0.1, 
+                        sam.name="test", 
+                        distance="euclidean", 
+                        norm.cell.names="",
+                        output.seg="FALSE", 
+                        plot.genes=FALSE, 
+                        genome="hg20",
+                        n.cores=8)
+saveRDS(copykat.sample_4, file = "../data/07_copykat_sample_to_run_4")
+
+
+sample_to_run_5 <- subset(snRNAseq,
+               (sample_id == "CRC_5"))
+exp.rawdata <- as.matrix(sample_to_run_5@assays$RNA$counts)
+
+options(bitmapType='cairo')
+copykat.sample_5 <- copykat(rawmat=exp.rawdata, 
+                        id.type="S", 
+                        ngene.chr=5, 
+                        win.size=25, 
+                        KS.cut=0.1, 
+                        sam.name="test", 
+                        distance="euclidean", 
+                        norm.cell.names="",
+                        output.seg="FALSE", 
+                        plot.genes=FALSE, 
+                        genome="hg20",
+                        n.cores=8)
+saveRDS(copykat.sample_5, file = "../data/07_copykat_sample_to_run_5")
+
+```
+

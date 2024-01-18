@@ -1,27 +1,21 @@
 ---
-title: "04_celltyping"
+title: "Cell type assignment"
 format: html
-editor: visual
 ---
-
-## Cell type assignment
 
 ```{r}
 rm(list = ls())
-
 ```
 
-#### Librairy
+Load the libraries:
 
-```{r, massage = False}
-
+```{r}
 library(dplyr)
 library(Seurat)
 library(patchwork)
 library(here)
 library(SingleR)
 library(celldex)
-
 library(SeuratData)
 library(dplyr)
 library(tidyr)
@@ -29,59 +23,62 @@ library(multtest)
 library(metap)
 library(tibble)
 library(purrr)
+library(copykat)
+library(tidyverse)
 ```
 
-#### Data Load
-
-```{r, massage = False}
-
-snRNAseq <- readRDS("../data/04_RNA_seurat")
-
-```
-
-Dim plot
+Load the seurat object:
 
 ```{r}
-
-DimPlot(snRNAseq, reduction = 'umap', group.by = 'RNA_snn_res.0.1')
-
+snRNAseq <- readRDS("../data/04_RNA_seurat_cca_int")
 ```
 
-#### Marker genes cell typing
-
-find conserved markger genes acrocces clusters.
+UMAP:
 
 ```{r}
-Idents(snRNAseq) <- "RNA_snn_res.0.1"
+p1 <- DimPlot(snRNAseq,
+              reduction = 'umap')
+
+p1
+
+ggsave("../plots/05_UMAP_no_annotations.png")
+```
+
+## Manual (not using this anymore)
+
+Find conserved marker genes accross clusters:
+
+```{r}
+#| eval: false
+
 DefaultAssay(snRNAseq) <- "RNA"
 annotations <- read.csv("/home/projects/22102_single_cell/day3/annotation.csv")
 ```
 
+Find conserved markers for each cluster:
+
 ```{r}
+#| eval: false
 
-
-cluster0_conserved_markers <- FindConservedMarkers(snRNAseq,
-                              ident.1 = 0,
-                              grouping.var = "condition",
-                              only.pos = TRUE,min.pct = 0.25,  min.diff.pct = 0.25,
-                      logfc.threshold = 0.25)
-
-#Load the table with gene descriptions to help you identify to what cell types the genes in the cluster can correspond to
-
-
+cluster0_conserved_markers <- FindConservedMarkers(
+  snRNAseq,
+  ident.1 = 0,
+  grouping.var = "condition",
+  only.pos = TRUE,
+  min.pct = 0.25,  
+  min.diff.pct = 0.25,
+  logfc.threshold = 0.25)
 
 # Combine markers with gene descriptions 
 cluster0_ann_markers <- cluster0_conserved_markers  |>  
-                rownames_to_column(var="gene") |> 
-                left_join(y = 
-                            unique(
-                              annotations[,c("gene_name", "description")]),
-                          by = c("gene" = "gene_name"))
-
-cluster0_ann_markers$gene
+  rownames_to_column(var="gene") |> 
+  left_join(y = unique(annotations[,c("gene_name",
+                                      "description")]),
+            by = c("gene" = "gene_name"))
 ```
 
 ```{r}
+#| eval: false
 
 snRNAseq <- RenameIdents(object = snRNAseq, 
                                 "0" = "epithelial cells",
@@ -102,37 +99,168 @@ snRNAseq <- RenameIdents(object = snRNAseq,
 head(snRNAseq@meta.data)
 ```
 
+Visualize data:
+
 ```{r}
-# visualize data
+#| eval: false
 
 snRNAseq$cell_type_1 <- Idents(snRNAseq)
 
 DimPlot(snRNAseq, reduction = 'umap', label = TRUE)
 ```
 
-#### Singler R cell typing
+## SingleR 
+
+Preprare reference data and run SingleR:
 
 ```{r}
-
 ref <- HumanPrimaryCellAtlasData()
-```
 
-```{r}
-serat_ref <- readRDS("/home/projects/22102_single_cell/day3/pbmcsca.rds")
+# subset from Becker GitHub
+types_to_use <- c(
+  "DC",
+  "Epithelial_cells",
+  "B_cell",
+  "Neutrophils",
+  "T_cells",
+  "Monocyte",
+	"Endothelial_cells",
+  "Neurons",
+  "Macrophage",
+  "NK_cell",
+	"BM",
+  "Platelets",
+  "Fibroblasts",
+  "Astrocyte",
+  "Myelocyte",
+  "Pre-B_cell_CD34-",
+  "Pro-B_cell_CD34+",
+  "Pro-Myelocyte")
 
-```
+ref <- ref[,(colData(ref)$label.main %in% types_to_use)]
 
-```{r}
-ref <- as.SingleCellExperiment(serat_ref, assay = "RNA")
+snRNAseq.counts <- GetAssayData(snRNAseq, 
+                       assay = "RNA", 
+                       layer = 'counts')
 
-pbmc_counts <- GetAssayData(snRNAseq, assay = "RNA", layer = 'counts')
-
-pred <- SingleR(test = pbmc_counts,
+pred <- SingleR(test = snRNAseq.counts,
                 ref = ref,
-                labels = ref$CellType,
+                labels = ref$label.main,
                 de.method="wilcox")
 
-snRNAseq$cell_type_2 <- pred$labels[match(rownames(snRNAseq@meta.data), rownames(pred))]
+snRNAseq$cell_type_singleR <- pred$labels[match(rownames(snRNAseq@meta.data), rownames(pred))]
+```
+
+UMAP:
+
+```{r}
+p2 <- DimPlot(snRNAseq, 
+        reduction = 'umap',
+        group.by = "cell_type_singleR")
+
+p2
+
+ggsave("../plots/05_UMAP_SingleR_subset.png")
+```
+
+Save object:
+
+```{r}
+saveRDS(snRNAseq, file = "../data/05_RNA_seurat_singleR_subset_ann")
+```
+
+Arrange plots for presentation:
+
+```{r}
+(p1 + NoLegend() + labs(title = "clusters") + theme(plot.title.position = "plot")) + (p2 + NoLegend() + labs(title = "singleR") + theme(axis.text.y = element_blank(), axis.title.y = element_blank(), plot.title.position = "plot"))
+
+ggsave("../plots/05_clusters_vs_singleR.png", 
+       width = 14, 
+       height = 7)
+```
+
+
+## CopyKat
+
+Extract raw counts from the data:
+
+```{r, massage = False}
+exp.rawdata <- as.matrix(snRNAseq@assays$RNA$counts)
+```
+
+Counts chormos by genes. Some parameters are\
+ngene.chr: is the mini number of genes to represent chomoromes, lower number will include more cells\
+win.size: number of genes pr seqment\
+Ks: seqment cuts senesityvity\
+n.cores: numbers of cores to run in paralize\
+low.DR: minum numbers of genes in fraction for something with smoothing\
+upper.DR: minumun number of genes in fraction for someting with seqments
+
+```{r}
+copykat.test <- copykat(rawmat=exp.rawdata, 
+                        id.type="S", 
+                        ngene.chr=5, 
+                        win.size=25, 
+                        KS.cut=0.1, 
+                        sam.name="test", 
+                        distance="euclidean", 
+                        norm.cell.names="",
+                        output.seg="FALSE", 
+                        plot.genes="TRUE", 
+                        genome="hg20",
+                        n.cores=1)
+```
+
+```{r}
+pred.test <- data.frame(copykat.test$prediction)
+pred.test <- pred.test[-which(pred.test$copykat.pred=="not.defined"),]  ##remove undefined cells
+CNA.test <- data.frame(copykat.test$CNAmat)
+```
+
+```{r}
+my_palette <- colorRampPalette(rev(RColorBrewer::brewer.pal(n = 3, name = "RdBu")))(n = 999)
+
+  chr <- as.numeric(CNA.test$chrom) %% 2+1
+  rbPal1 <- colorRampPalette(c('black','grey'))
+  CHR <- rbPal1(2)[as.numeric(chr)]
+  chr1 <- cbind(CHR,CHR)
+
+  rbPal5 <- colorRampPalette(RColorBrewer::brewer.pal(n = 8, name = "Dark2")[2:1])
+  com.preN <- pred.test$copykat.pred
+  pred <- rbPal5(2)[as.numeric(factor(com.preN))]
+
+  cells <- rbind(pred,pred)
+  col_breaks = c(seq(-1,-0.4,length=50),seq(-0.4,-0.2,length=150),seq(-0.2,0.2,length=600),seq(0.2,0.4,length=150),seq(0.4, 1,length=50))
+
+heatmap.3(t(CNA.test[,4:ncol(CNA.test)]),dendrogram="r", distfun = function(x) parallelDist::parDist(x,threads =4, method = "euclidean"), hclustfun = function(x) hclust(x, method="ward.D2"),
+            ColSideColors=chr1,RowSideColors=cells,Colv=NA, Rowv=TRUE,
+            notecol="black",col=my_palette,breaks=col_breaks, key=TRUE,
+            keysize=1, density.info="none", trace="none",
+            cexRow=0.1,cexCol=0.1,cex.main=1,cex.lab=0.1,
+            symm=F,symkey=F,symbreaks=T,cex=1, cex.main=4, margins=c(10,10))
+
+  legend("topright", paste("pred.",names(table(com.preN)),sep=""), pch=15,col=RColorBrewer::brewer.pal(n = 8, name = "Dark2")[2:1], cex=0.6, bty="n")
+```
+
+```{r}
+tumor.cells <- pred.test$cell.names[which(pred.test$copykat.pred=="aneuploid")]
+tumor.mat <- CNA.test[, which(colnames(CNA.test) %in% tumor.cells)]
+hcc <- hclust(parallelDist::parDist(t(tumor.mat),threads =4, method = "euclidean"), method = "ward.D2")
+hc.umap <- cutree(hcc,2)
+
+rbPal6 <- colorRampPalette(RColorBrewer::brewer.pal(n = 8, name = "Dark2")[3:4])
+subpop <- rbPal6(2)[as.numeric(factor(hc.umap))]
+cells <- rbind(subpop,subpop)
+
+heatmap.3(t(tumor.mat),dendrogram="r", distfun = function(x) parallelDist::parDist(x,threads =4, method = "euclidean"), hclustfun = function(x) hclust(x, method="ward.D2"),
+            ColSideColors=chr1,RowSideColors=cells,Colv=NA, Rowv=TRUE,
+            notecol="black",col=my_palette,breaks=col_breaks, key=TRUE,
+            keysize=1, density.info="none", trace="none",
+            cexRow=0.1,cexCol=0.1,cex.main=1,cex.lab=0.1,
+            symm=F,symkey=F,symbreaks=T,cex=1, cex.main=4, margins=c(10,10))
+
+  legend("topright", c("c1","c2"), pch=15,col=RColorBrewer::brewer.pal(n = 8, name = "Dark2")[3:4], cex=0.9, bty='n')
+
 ```
 
 ```{r}

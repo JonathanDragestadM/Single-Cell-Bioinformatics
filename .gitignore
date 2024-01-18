@@ -6,6 +6,8 @@ data/04_RNA_seurat_cca_int
 data/04_anchors
 data/04_RNA_seurat_v2
 data/05_RNA_seurat
+data/05_RNA_seurat_singleR_ann
+data/05_RNA_seurat_singleR_subset_ann
 plots/
 papers/
 .Rhistory
@@ -22,4 +24,7 @@ tmp/
 plots/
 all_samples_HuBMAP_HTAN/
 plot/
+data/*
+R/test_copykat*
+
 
